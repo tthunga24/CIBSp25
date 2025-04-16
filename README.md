@@ -13,5 +13,5 @@ FInal Deliverable for CIB Spring 25
 2. Run the app
 
    ```
-   $ streamlit run streamlit_app.py
+   $ streamlit run main.py
    ```
