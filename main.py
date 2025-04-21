@@ -157,6 +157,37 @@ if st.session_state.get("generate_long_leg", False):
             solution_found = True
             break
 
+    r = 0.05
+    S = selected_strike
+    K_short = selected_strike
+    K_long = closest_strike
+    T_long = (datetime.datetime.strptime(long_exp, "%Y-%m-%d").date() - datetime.date.today()).days / 365
+    qty_short = q_s
+    qty_long = q_l_rounded
+
+    # Define the Black-Scholes call formula in Mathematica syntax
+    bs_call_mma = lambda S, K, T, r, sigma: (
+        f"{S} * CDF[NormalDistribution[0, 1], "
+        f"(Log[{S}/{K}] + ({r} + 0.5 * {sigma}^2) * {T}) / ({sigma} * Sqrt[{T}])] "
+        f"- {K} * Exp[-{r} * {T}] * CDF[NormalDistribution[0, 1], "
+        f"(Log[{S}/{K}] + ({r} - 0.5 * {sigma}^2) * {T}) / ({sigma} * Sqrt[{T}])]"
+    )
+
+    # Build full expression for spread PnL in terms of iv and t
+    short_expr = bs_call_mma(S, K_short, "t", r, "iv")
+    long_expr = bs_call_mma(S, K_long, T_long, r, "iv")
+    spread_expr = f"{qty_long} * ({long_expr}) - {qty_short} * ({short_expr})"
+
+    # Final Mathematica command string
+    plot_cmd = (
+    f'Plot3D[{spread_expr}, '
+    f'{{iv, 0.1, 0.6}}, '
+    f'{{t, 0.01, 0.04}}, '
+    f'PlotRange -> All, '
+    f'AxesLabel -> {{"IV", "Time to Expiry", "PnL"}}]'
+    )
+    st.code(plot_cmd)
+
     if st.button("Final position and visualize"):
         st.session_state.show_vis = True
 
