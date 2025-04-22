@@ -130,7 +130,7 @@ if st.session_state.get("generate_long_leg", False):
 
     gamma_short = gamma
 
-    max_short_qty = 50
+    max_short_qty = 100
     tolerance = 0.005
     solution_found = False
 
@@ -164,7 +164,7 @@ if st.session_state.get("generate_long_leg", False):
     qty_short = q_s
     qty_long = q_l_rounded
     dte_min = 1
-    dte_max = int(T_long * 365)
+    dte_max = 15
     entry_cost = opt['lastPrice'] * qty_short + long_opt['lastPrice'] * qty_long
 
     bs_call_mma = lambda S, K, T, r, sigma: (
@@ -188,9 +188,6 @@ if st.session_state.get("generate_long_leg", False):
     )
 
     st.code(plot_cmd)
-
-    if st.button("Final position and visualize"):
-        st.session_state.show_vis = True
 
     if not solution_found:
         st.warning("⚠️ Couldn't find integer quantities to gamma hedge within 50 short calls.")
