@@ -5,7 +5,6 @@ import numpy as np
 from scipy.stats import norm
 from math import isclose
 
-# ----- Black-Scholes Greeks -----
 def black_scholes_greeks(S, K, T, r, sigma):
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2)*T) / (sigma * np.sqrt(T))
     d2 = d1 - sigma * np.sqrt(T)
@@ -17,7 +16,6 @@ def black_scholes_greeks(S, K, T, r, sigma):
     
     return delta, gamma, theta, vega
 
-# ----- Streamlit UI -----
 st.set_page_config(page_title="Options Chain Viewer", layout="centered")
 st.title("📈 Gamma Neutral Calendar Spread Builder")
 
@@ -42,23 +40,17 @@ if ticker_symbol:
             calls = opt_chain.calls
 
             available_strikes = calls['strike'].sort_values().tolist()
-            # Get current stock price
             current_price = ticker.history(period="1d")["Close"].iloc[-1]
 
-            # Sort strikes and find the ATM strike (closest to spot)
             strikes_sorted = sorted(calls['strike'].tolist())
             atm_strike = min(strikes_sorted, key=lambda x: abs(x - current_price))
 
-            # Find index of ATM strike
             atm_index = strikes_sorted.index(atm_strike)
 
-            # Select ATM and 5 OTM strikes
             selected_strikes = strikes_sorted[atm_index:atm_index + 6]  # atm + 5 higher
 
-            # Filter calls to only include these strikes
             filtered_calls = calls[calls['strike'].isin(selected_strikes)]
 
-            # Dropdown to select from these
             selected_strike = st.selectbox("🎯 Select ATM or OTM Strike:", filtered_calls['strike'].sort_values())
 
             selected_option = calls[calls['strike'] == selected_strike]
@@ -66,7 +58,6 @@ if ticker_symbol:
                 opt = selected_option.iloc[0]
                 st.markdown("### Greeks:")
 
-                # Inputs for BS model
                 S = current_price
                 K = opt['strike']
                 T = (datetime.datetime.strptime(exp_date, "%Y-%m-%d").date() - datetime.date.today()).days / 365
@@ -107,7 +98,6 @@ if st.session_state.get("generate_long_leg", False):
 
     long_chain = ticker.option_chain(long_exp).calls
 
-    # Grab closest strike
     long_strikes = long_chain['strike'].tolist()
     closest_strike = min(long_strikes, key=lambda x: abs(x - selected_strike))
     long_option = long_chain[long_chain['strike'] == closest_strike]
@@ -177,7 +167,6 @@ if st.session_state.get("generate_long_leg", False):
     dte_max = int(T_long * 365)
     entry_cost = opt['lastPrice'] * qty_short + long_opt['lastPrice'] * qty_long
 
-    # Define the Black-Scholes call formula in Mathematica syntax
     bs_call_mma = lambda S, K, T, r, sigma: (
         f"{S} * CDF[NormalDistribution[0, 1], "
         f"(Log[{S}/{K}] + ({r} + 0.5 * {sigma}^2) * {T}) / ({sigma} * Sqrt[{T}])] "
@@ -185,12 +174,10 @@ if st.session_state.get("generate_long_leg", False):
         f"(Log[{S}/{K}] + ({r} - 0.5 * {sigma}^2) * {T}) / ({sigma} * Sqrt[{T}])]"
     )
 
-    # Build full expression for spread PnL in terms of iv and t
     short_expr = bs_call_mma(S, K_short, "(dte/365)", r, "iv")
     long_expr = bs_call_mma(S, K_long, T_long, r, "iv")
     spread_expr = f"({qty_long} * ({long_expr}) - {qty_short} * ({short_expr})) - {entry_cost}"
 
-    # Final Mathematica command string
     plot_cmd = (
     f'Plot3D[{spread_expr}, '
     f'{{iv, 0.1, 0.8}}, '
