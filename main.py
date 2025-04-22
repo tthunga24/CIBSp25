@@ -74,8 +74,11 @@ if ticker_symbol:
                 sigma = opt['impliedVolatility'] if not np.isnan(opt['impliedVolatility']) else 0.4
 
                 delta, gamma, theta, vega = black_scholes_greeks(S, K, T, r, sigma)
+
                 delta *= -1
                 gamma *= -1
+                theta *= -1
+                vega *= -1
 
                 st.write(f"**Strike:** {K}")
                 st.write(f"**Price: {opt['lastPrice']}**")
@@ -122,10 +125,11 @@ if st.session_state.get("generate_long_leg", False):
             sigma=sigma_long
         )
 
-        theta_L *= -1
+        
 
         st.markdown("### 🔍 Long Leg Option (≈45 Days)")
         st.write(f"**Closest Available Strike:** {closest_strike}")
+        st.write(f"**Price:** {long_opt['lastPrice']}")
         st.write(f"**IV:** {sigma_long:.2%}")
         st.write(f"**Delta:** {delta_L:.4f}")
         st.write(f"**Gamma:** {gamma_L:.6f}")
@@ -137,7 +141,7 @@ if st.session_state.get("generate_long_leg", False):
     gamma_short = gamma
 
     max_short_qty = 50
-    tolerance = 1e-2
+    tolerance = 0.005
     solution_found = False
 
     for q_s in range(1, max_short_qty + 1):
@@ -147,11 +151,16 @@ if st.session_state.get("generate_long_leg", False):
         if isclose(q_l_exact, q_l_rounded, abs_tol=tolerance) and q_l_rounded > 0:
             net_gamma = gamma_short * q_s + gamma_L * q_l_rounded
             net_delta = (delta * q_s) + (delta_L * q_l_rounded)
-            st.markdown("### ⚖️ Integer Gamma Neutral Solution")
+            net_vega = (vega * q_s) + (vega_L * q_l_rounded)
+            net_theta = (theta * q_s) + (theta_L * q_l_rounded)
+
+            st.markdown("### Final Gamma Neutral Position")
             st.write(f"**Short Calls:** {q_s}")
             st.write(f"**Long Calls:** {q_l_rounded}")
-            st.write(f"**Net Gamma:** {net_gamma:.6f}")
             st.write(f"**Net Delta:** {net_delta:.6f}")
+            st.write(f"**Net Gamma:** {net_gamma:.6f}")
+            st.write(f"**Net Theta:** {net_theta / 365:.6f}")
+            st.write(f"**Net Vega:** {net_vega / 100:.6f}")
             st.write(f"**To neutralize delta, equity position:** {(net_delta * -100):.0f}")
 
             solution_found = True
@@ -164,6 +173,9 @@ if st.session_state.get("generate_long_leg", False):
     T_long = (datetime.datetime.strptime(long_exp, "%Y-%m-%d").date() - datetime.date.today()).days / 365
     qty_short = q_s
     qty_long = q_l_rounded
+    dte_min = 1
+    dte_max = int(T_long * 365)
+    entry_cost = opt['lastPrice'] * qty_short + long_opt['lastPrice'] * qty_long
 
     # Define the Black-Scholes call formula in Mathematica syntax
     bs_call_mma = lambda S, K, T, r, sigma: (
@@ -174,18 +186,20 @@ if st.session_state.get("generate_long_leg", False):
     )
 
     # Build full expression for spread PnL in terms of iv and t
-    short_expr = bs_call_mma(S, K_short, "t", r, "iv")
+    short_expr = bs_call_mma(S, K_short, "(dte/365)", r, "iv")
     long_expr = bs_call_mma(S, K_long, T_long, r, "iv")
-    spread_expr = f"{qty_long} * ({long_expr}) - {qty_short} * ({short_expr})"
+    spread_expr = f"({qty_long} * ({long_expr}) - {qty_short} * ({short_expr})) - {entry_cost}"
 
     # Final Mathematica command string
     plot_cmd = (
     f'Plot3D[{spread_expr}, '
-    f'{{iv, 0.1, 0.6}}, '
-    f'{{t, 0.01, 0.04}}, '
-    f'PlotRange -> All, '
-    f'AxesLabel -> {{"IV", "Time to Expiry", "PnL"}}]'
+    f'{{iv, 0.1, 0.8}}, '
+    f'{{dte, {dte_min}, {dte_max}}}, '
+    f'PlotRange -> Full, '
+    f'AxesLabel -> {{"IV", "Days to Expiry", "PnL"}}, '
+    f'ColorFunction -> "TemperatureMap", Mesh -> None]'
     )
+
     st.code(plot_cmd)
 
     if st.button("Final position and visualize"):
